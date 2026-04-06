@@ -8,6 +8,7 @@ import de.photon.anticheataddition.AntiCheatAddition;
 import de.photon.anticheataddition.modules.Module;
 import de.photon.anticheataddition.modules.ModuleLoader;
 import de.photon.anticheataddition.util.execute.Placeholders;
+import de.photon.anticheataddition.util.log.Log;
 import de.photon.anticheataddition.util.pluginmessage.ByteBufUtil;
 import de.photon.anticheataddition.util.pluginmessage.MessageChannel;
 import de.photon.anticheataddition.util.protocol.PacketAdapterBuilder;
@@ -23,27 +24,32 @@ public final class BrandHider extends Module implements PacketListener {
     private String brand;
     private final String channel = MessageChannel.MC_BRAND_CHANNEL.getChannel().orElseThrow();
 
-    private BrandHider() {
+    private BrandHider()
+    {
         super("BrandHider");
     }
 
-    public void setBrand(String brand) {
+    public void setBrand(String brand)
+    {
         this.brand = ChatColor.translateAlternateColorCodes('&', brand) + ChatColor.RESET;
         this.updateAllBrands();
     }
 
-    private void updateAllBrands() {
+    private void updateAllBrands()
+    {
         for (Player onlinePlayer : Bukkit.getOnlinePlayers()) updateBrand(onlinePlayer);
     }
 
-    private void updateBrand(final Player player) {
+    private void updateBrand(final Player player)
+    {
         final String renderedBrand = Placeholders.replacePlaceholders(this.brand, player);
         final byte[] payload = createBrandPayload(renderedBrand);
 
         PacketEvents.getAPI().getPlayerManager().sendPacket(player, new WrapperPlayServerPluginMessage(this.channel, payload));
     }
 
-    private static byte[] createBrandPayload(final String brand) {
+    private static byte[] createBrandPayload(final String brand)
+    {
         final ByteBuf buf = Unpooled.buffer();
         try {
             ByteBufUtil.writeString(buf, brand);
@@ -54,7 +60,9 @@ public final class BrandHider extends Module implements PacketListener {
     }
 
     @Override
-    public void enable() {
+    public void enable()
+    {
+        Log.finer(() -> "BrandHider brand " + this.brand + " | channel " + this.channel);
         this.setBrand(loadString(".brand", "Some Spigot"));
 
         final long refreshRate = loadLong(".refresh_rate", 0);
@@ -64,17 +72,19 @@ public final class BrandHider extends Module implements PacketListener {
     }
 
     @Override
-    protected ModuleLoader createModuleLoader() {
+    protected ModuleLoader createModuleLoader()
+    {
         return ModuleLoader.builder(this)
-                .addPacketListeners(PacketAdapterBuilder.of(this, PacketType.Play.Server.PLUGIN_MESSAGE).onSending((event, user) -> {
-                    final WrapperPlayServerPluginMessage packet = new WrapperPlayServerPluginMessage(event);
-                    final String channel = packet.getChannelName();
+                           .addPacketListeners(PacketAdapterBuilder.of(this, PacketType.Configuration.Server.PLUGIN_MESSAGE, PacketType.Play.Server.PLUGIN_MESSAGE).onSendingRaw((event) -> {
+                               final WrapperPlayServerPluginMessage packet = new WrapperPlayServerPluginMessage(event);
+                               final String channel = packet.getChannelName();
+                               Log.finer(() -> "BrandHider got PLUGIN_MESSAGE in channel " + channel + " | equals: " + this.channel.equals(channel));
 
-                    if (this.channel.equals(channel)) {
-                        final String renderedBrand = Placeholders.replacePlaceholders(this.brand, user.getPlayer());
-                        packet.setData(createBrandPayload(renderedBrand));
-                        event.markForReEncode(true);
-                    }
-                }).build()).build();
+                               if (this.channel.equals(channel)) {
+                                   final String renderedBrand = Placeholders.replacePlaceholders(this.brand, event.getPlayer());
+                                   packet.setData(createBrandPayload(renderedBrand));
+                                   event.markForReEncode(true);
+                               }
+                           }).build()).build();
     }
 }

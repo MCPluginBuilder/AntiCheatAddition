@@ -19,16 +19,18 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 
 @RequiredArgsConstructor(access = AccessLevel.PRIVATE)
-public final class PacketAdapterBuilder
-{
+public final class PacketAdapterBuilder {
     @NotNull private final Module module;
     @NotNull private final Set<PacketTypeCommon> types;
 
     private PacketListenerPriority priority = PacketListenerPriority.NORMAL;
     private BiConsumer<PacketReceiveEvent, User> onReceiving = null;
     private BiConsumer<PacketSendEvent, User> onSending = null;
+    private Consumer<PacketReceiveEvent> onReceivingRaw = null;
+    private Consumer<PacketSendEvent> onSendingRaw = null;
 
     public static boolean checkSync(@NotNull Callable<Boolean> task)
     {
@@ -48,9 +50,7 @@ public final class PacketAdapterBuilder
     {
         try {
             // If the timeout is smaller than or equal to 0, wait indefinitely.
-            return timeout <= 0 ?
-                   Boolean.TRUE.equals(Bukkit.getScheduler().callSyncMethod(AntiCheatAddition.getInstance(), task).get()) :
-                   Boolean.TRUE.equals(Bukkit.getScheduler().callSyncMethod(AntiCheatAddition.getInstance(), task).get(timeout, unit));
+            return timeout <= 0 ? Boolean.TRUE.equals(Bukkit.getScheduler().callSyncMethod(AntiCheatAddition.getInstance(), task).get()) : Boolean.TRUE.equals(Bukkit.getScheduler().callSyncMethod(AntiCheatAddition.getInstance(), task).get(timeout, unit));
 
         } catch (InterruptedException | ExecutionException e) {
             Log.error("Unable to complete the synchronous calculations.", e);
@@ -92,6 +92,24 @@ public final class PacketAdapterBuilder
         return this;
     }
 
+    /**
+     * This method does not guarantee a valid {@link User} exists and needs to be used for server join protocols.
+     */
+    public PacketAdapterBuilder onReceivingRaw(Consumer<PacketReceiveEvent> onReceivingRaw)
+    {
+        this.onReceivingRaw = onReceivingRaw;
+        return this;
+    }
+
+    /**
+     * This method does not guarantee a valid {@link User} exists and needs to be used for server join protocols.
+     */
+    public PacketAdapterBuilder onSendingRaw(Consumer<PacketSendEvent> onSendingRaw)
+    {
+        this.onSendingRaw = onSendingRaw;
+        return this;
+    }
+
     private void runPacketReceiveEventBiConsumer(PacketReceiveEvent event, BiConsumer<PacketReceiveEvent, User> biConsumer)
     {
         final User user = User.getUser(event);
@@ -106,43 +124,219 @@ public final class PacketAdapterBuilder
 
     public PacketListenerCommon build()
     {
-        Preconditions.checkArgument(this.onReceiving != null || this.onSending != null, "Tried to create PacketAdapter without receiving or sending actions.");
+        Preconditions.checkArgument(this.onReceiving != null || this.onSending != null || this.onReceivingRaw != null || this.onSendingRaw != null,
+                                    "Tried to create PacketAdapter without receiving or sending actions.");
 
-        if (this.onReceiving != null && this.onSending != null) {
-            return new PacketListenerAbstract(this.priority)
-            {
+        final boolean hasReceive = this.onReceiving != null;
+        final boolean hasSend = this.onSending != null;
+        final boolean hasReceiveRaw = this.onReceivingRaw != null;
+        final boolean hasSendRaw = this.onSendingRaw != null;
+
+        // Enumerate all the different possibilities for improved performance.
+        if (hasReceive && hasSend && hasReceiveRaw && hasSendRaw) {
+            return new PacketListenerAbstract(this.priority) {
                 @Override
                 public void onPacketReceive(PacketReceiveEvent event)
                 {
-                    if (types.contains(event.getPacketType()))
-                        runPacketReceiveEventBiConsumer(event, onReceiving);
+                    if (!types.contains(event.getPacketType())) return;
+                    onReceivingRaw.accept(event);
+                    runPacketReceiveEventBiConsumer(event, onReceiving);
                 }
 
                 @Override
                 public void onPacketSend(PacketSendEvent event)
                 {
-                    if (types.contains(event.getPacketType()))
-                        runPacketSendEventBiConsumer(event, onSending);
+                    if (!types.contains(event.getPacketType())) return;
+                    onSendingRaw.accept(event);
+                    runPacketSendEventBiConsumer(event, onSending);
                 }
             };
-        } else if (onReceiving != null) {
-            return new PacketListenerAbstract(this.priority)
-            {
+        } else if (hasReceive && hasSend && hasReceiveRaw) {
+            return new PacketListenerAbstract(this.priority) {
                 @Override
                 public void onPacketReceive(PacketReceiveEvent event)
                 {
-                    if (types.contains(event.getPacketType()))
-                        runPacketReceiveEventBiConsumer(event, onReceiving);
+                    if (!types.contains(event.getPacketType())) return;
+                    onReceivingRaw.accept(event);
+                    runPacketReceiveEventBiConsumer(event, onReceiving);
+                }
+
+                @Override
+                public void onPacketSend(PacketSendEvent event)
+                {
+                    if (!types.contains(event.getPacketType())) return;
+                    runPacketSendEventBiConsumer(event, onSending);
+                }
+            };
+        } else if (hasReceive && hasSend && hasSendRaw) {
+            return new PacketListenerAbstract(this.priority) {
+                @Override
+                public void onPacketReceive(PacketReceiveEvent event)
+                {
+                    if (!types.contains(event.getPacketType())) return;
+                    runPacketReceiveEventBiConsumer(event, onReceiving);
+                }
+
+                @Override
+                public void onPacketSend(PacketSendEvent event)
+                {
+                    if (!types.contains(event.getPacketType())) return;
+                    onSendingRaw.accept(event);
+                    runPacketSendEventBiConsumer(event, onSending);
+                }
+            };
+        } else if (hasReceive && hasSend) {
+            return new PacketListenerAbstract(this.priority) {
+                @Override
+                public void onPacketReceive(PacketReceiveEvent event)
+                {
+                    if (!types.contains(event.getPacketType())) return;
+                    runPacketReceiveEventBiConsumer(event, onReceiving);
+                }
+
+                @Override
+                public void onPacketSend(PacketSendEvent event)
+                {
+                    if (!types.contains(event.getPacketType())) return;
+                    runPacketSendEventBiConsumer(event, onSending);
+                }
+            };
+        } else if (hasReceive && hasReceiveRaw && hasSendRaw) {
+            return new PacketListenerAbstract(this.priority) {
+                @Override
+                public void onPacketReceive(PacketReceiveEvent event)
+                {
+                    if (!types.contains(event.getPacketType())) return;
+                    onReceivingRaw.accept(event);
+                    runPacketReceiveEventBiConsumer(event, onReceiving);
+                }
+
+                @Override
+                public void onPacketSend(PacketSendEvent event)
+                {
+                    if (!types.contains(event.getPacketType())) return;
+                    onSendingRaw.accept(event);
+                }
+            };
+        } else if (hasReceive && hasReceiveRaw) {
+            return new PacketListenerAbstract(this.priority) {
+                @Override
+                public void onPacketReceive(PacketReceiveEvent event)
+                {
+                    if (!types.contains(event.getPacketType())) return;
+                    onReceivingRaw.accept(event);
+                    runPacketReceiveEventBiConsumer(event, onReceiving);
+                }
+            };
+        } else if (hasReceive && hasSendRaw) {
+            return new PacketListenerAbstract(this.priority) {
+                @Override
+                public void onPacketReceive(PacketReceiveEvent event)
+                {
+                    if (!types.contains(event.getPacketType())) return;
+                    runPacketReceiveEventBiConsumer(event, onReceiving);
+                }
+
+                @Override
+                public void onPacketSend(PacketSendEvent event)
+                {
+                    if (!types.contains(event.getPacketType())) return;
+                    onSendingRaw.accept(event);
+                }
+            };
+        } else if (hasReceive) {
+            return new PacketListenerAbstract(this.priority) {
+                @Override
+                public void onPacketReceive(PacketReceiveEvent event)
+                {
+                    if (!types.contains(event.getPacketType())) return;
+                    runPacketReceiveEventBiConsumer(event, onReceiving);
+                }
+            };
+        } else if (hasSend && hasReceiveRaw && hasSendRaw) {
+            return new PacketListenerAbstract(this.priority) {
+                @Override
+                public void onPacketReceive(PacketReceiveEvent event)
+                {
+                    if (!types.contains(event.getPacketType())) return;
+                    onReceivingRaw.accept(event);
+                }
+
+                @Override
+                public void onPacketSend(PacketSendEvent event)
+                {
+                    if (!types.contains(event.getPacketType())) return;
+                    onSendingRaw.accept(event);
+                    runPacketSendEventBiConsumer(event, onSending);
+                }
+            };
+        } else if (hasSend && hasReceiveRaw) {
+            return new PacketListenerAbstract(this.priority) {
+                @Override
+                public void onPacketReceive(PacketReceiveEvent event)
+                {
+                    if (!types.contains(event.getPacketType())) return;
+                    onReceivingRaw.accept(event);
+                }
+
+                @Override
+                public void onPacketSend(PacketSendEvent event)
+                {
+                    if (!types.contains(event.getPacketType())) return;
+                    runPacketSendEventBiConsumer(event, onSending);
+                }
+            };
+        } else if (hasSend && hasSendRaw) {
+            return new PacketListenerAbstract(this.priority) {
+                @Override
+                public void onPacketSend(PacketSendEvent event)
+                {
+                    if (!types.contains(event.getPacketType())) return;
+                    onSendingRaw.accept(event);
+                    runPacketSendEventBiConsumer(event, onSending);
+                }
+            };
+        } else if (hasSend) {
+            return new PacketListenerAbstract(this.priority) {
+                @Override
+                public void onPacketSend(PacketSendEvent event)
+                {
+                    if (!types.contains(event.getPacketType())) return;
+                    runPacketSendEventBiConsumer(event, onSending);
+                }
+            };
+        } else if (hasReceiveRaw && hasSendRaw) {
+            return new PacketListenerAbstract(this.priority) {
+                @Override
+                public void onPacketReceive(PacketReceiveEvent event)
+                {
+                    if (!types.contains(event.getPacketType())) return;
+                    onReceivingRaw.accept(event);
+                }
+
+                @Override
+                public void onPacketSend(PacketSendEvent event)
+                {
+                    if (!types.contains(event.getPacketType())) return;
+                    onSendingRaw.accept(event);
+                }
+            };
+        } else if (hasReceiveRaw) {
+            return new PacketListenerAbstract(this.priority) {
+                @Override
+                public void onPacketReceive(PacketReceiveEvent event)
+                {
+                    if (!types.contains(event.getPacketType())) return;
+                    onReceivingRaw.accept(event);
                 }
             };
         } else {
-            return new PacketListenerAbstract(this.priority)
-            {
+            return new PacketListenerAbstract(this.priority) {
                 @Override
                 public void onPacketSend(PacketSendEvent event)
                 {
-                    if (types.contains(event.getPacketType()))
-                        runPacketSendEventBiConsumer(event, onSending);
+                    if (!types.contains(event.getPacketType())) return;
+                    onSendingRaw.accept(event);
                 }
             };
         }
