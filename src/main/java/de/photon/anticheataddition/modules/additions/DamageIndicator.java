@@ -26,8 +26,11 @@ public final class DamageIndicator extends Module {
     private static final float SPOOFED_HEALTH = 0.5F;
     private static final double SPOOFED_MAX_HEALTH = 1.0D;
 
-    private final boolean spoofOthers = loadBoolean(".spoof.others", true);
-    private final boolean spoofPlayers = loadBoolean(".spoof.players", true);
+    private final boolean spoofOthers = loadBoolean(".entities.others", true);
+    private final boolean spoofPlayers = loadBoolean(".entities.players", true);
+
+    private final boolean spoofHealth = loadBoolean(".spoof.health", true);
+    private final boolean spoofMaxHealth = loadBoolean(".spoof.max_health", true);
 
     private DamageIndicator()
     {
@@ -42,8 +45,8 @@ public final class DamageIndicator extends Module {
                 .priority(PacketListenerPriority.HIGH)
                 // Use the onSending rather than onSendingRaw to allow for bypassing.
                 .onSending((event, user) -> {
-                    if (event.getPacketType() == PacketType.Play.Server.ENTITY_METADATA) rewriteHealthMetadata(event);
-                    else if (event.getPacketType() == PacketType.Play.Server.UPDATE_ATTRIBUTES) rewriteMaxHealthAttribute(event);
+                    if (this.spoofHealth && event.getPacketType() == PacketType.Play.Server.ENTITY_METADATA) rewriteHealthMetadata(event);
+                    else if (this.spoofMaxHealth && event.getPacketType() == PacketType.Play.Server.UPDATE_ATTRIBUTES) rewriteMaxHealthAttribute(event);
                 }).build());
     }
 
