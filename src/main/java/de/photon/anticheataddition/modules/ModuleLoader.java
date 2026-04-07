@@ -152,7 +152,7 @@ public final class ModuleLoader
 
         public Builder addPluginIncompatibilities(String... incompatibilities)
         {
-            this.pluginDependencies.add(incompatibilities);
+            this.pluginIncompatibilities.add(incompatibilities);
             return this;
         }
 

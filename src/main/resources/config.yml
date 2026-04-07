@@ -43,8 +43,14 @@ CommandHider:
 # Other plugins can still get the accurate player health.
 DamageIndicator:
   enabled: true
-  # Entity categories to spoof health for.
+  # What data should be spoofed
   spoof:
+    # The current health of an entity
+    health: true
+    # The maximum health an entity can have
+    max_health: true
+  # Entity categories to spoof health for.
+  entities:
     players: true
     others: true
 
@@ -190,7 +196,7 @@ AutoTool:
   streak_window: 5000
   # Commands executed when the player’s VL crosses these thresholds.
   thresholds:
-    50:  "<YOUR_STAFFCHAT_COMMAND> {player} in {world} is suspected for AutoTool"
+    50: "<YOUR_STAFFCHAT_COMMAND> {player} in {world} is suspected for AutoTool"
     100: "<YOUR_STAFFCHAT_COMMAND> {player} in {world} is highly suspected for AutoTool"
     200: "kick {player} AutoTool"
 
@@ -203,7 +209,7 @@ AutoTotem:
   min_refill_delay: 150
   # Commands executed when the player’s VL crosses these thresholds.
   thresholds:
-    50:  "<YOUR_STAFFCHAT_COMMAND> {player} in {world} is suspected for AutoTotem"
+    50: "<YOUR_STAFFCHAT_COMMAND> {player} in {world} is suspected for AutoTotem"
     100: "<YOUR_STAFFCHAT_COMMAND> {player} in {world} is highly suspected for AutoTotem"
     200: "kick {player} AutoTotem"
 

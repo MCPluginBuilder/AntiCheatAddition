@@ -36,8 +36,7 @@ public enum ServerVersion {
     MC121_8("1.21.8", true, new MetadataPositionIndex(9, 12, 17), 771, 772),
     MC121_10("1.21.10", true, new MetadataPositionIndex(9, 12, 16), 773),
     MC121_11("1.21.11", true, new MetadataPositionIndex(9, 12, 16), 774),
-    // This is a placeholder for future versions to make sure that ACA will continue to work.
-    MC121_X("1.21", true, new MetadataPositionIndex(9, 12, 16), 775);
+    MC26_1("26.1", true, new MetadataPositionIndex(9, 12, 16), 775);
 
     private static final Map<Integer, ServerVersion> PROTOCOL_VERSION_MAP = EnumSet.allOf(ServerVersion.class)
             .stream()

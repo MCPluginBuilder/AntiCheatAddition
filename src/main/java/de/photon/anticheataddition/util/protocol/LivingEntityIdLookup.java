@@ -14,6 +14,7 @@ import io.github.retrooper.packetevents.util.SpigotConversionUtil;
 import org.bukkit.Bukkit;
 import org.bukkit.World;
 import org.bukkit.entity.LivingEntity;
+import org.jspecify.annotations.NonNull;
 
 import javax.annotation.Nullable;
 
@@ -34,7 +35,7 @@ public final class LivingEntityIdLookup
         PacketEvents.getAPI().getEventManager().registerListener(new PacketListenerAbstract()
         {
             @Override
-            public void onPacketSend(PacketSendEvent event)
+            public void onPacketSend(@NonNull PacketSendEvent event)
             {
                 if (event.getPacketType() == PacketType.Play.Server.SPAWN_LIVING_ENTITY) {
                     final WrapperPlayServerSpawnLivingEntity wrapper = new WrapperPlayServerSpawnLivingEntity(event);
